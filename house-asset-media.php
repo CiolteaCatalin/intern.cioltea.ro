@@ -1,0 +1,2 @@
+<?php
+require __DIR__.'/includes/bootstrap.php';require_login();$id=(int)($_GET['id']??0);$q=$pdo->prepare('SELECT document_path FROM house_purchases WHERE id=?');$q->execute([$id]);$p=(string)$q->fetchColumn();if(!$p||!str_starts_with($p,'storage/house-assets/')||!is_file(__DIR__.'/'.$p)){http_response_code(404);exit;}$mime=(new finfo(FILEINFO_MIME_TYPE))->file(__DIR__.'/'.$p)?:'application/octet-stream';header('Content-Type: '.$mime);header('Cache-Control: private,max-age=86400');readfile(__DIR__.'/'.$p);

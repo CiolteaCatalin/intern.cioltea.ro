@@ -1,0 +1,75 @@
+{
+  "name": "Cioltea Hub",
+  "short_name": "Cioltea Hub",
+  "description": "Buget, familie, liste, mașini și planificări într-un singur loc.",
+  "start_url": "/dashboard.php",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#F4F7FB",
+  "theme_color": "#315CF5",
+  "icons": [
+    {
+      "src": "/assets/icons/icon-192.png?v=23.1",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/icons/icon-512.png?v=23.1",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Adaugă cheltuială",
+      "short_name": "Cheltuială",
+      "url": "/dashboard.php?quick=expense",
+      "icons": [
+        {
+          "src": "/assets/icons/icon-192.png?v=23.1",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Lista de cumpărături",
+      "short_name": "Liste",
+      "url": "/lists.php",
+      "icons": [
+        {
+          "src": "/assets/icons/icon-192.png?v=23.1",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Garaj",
+      "short_name": "Garaj",
+      "url": "/cars.php",
+      "icons": [
+        {
+          "src": "/assets/icons/icon-192.png?v=23.1",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Pozele familiei",
+      "short_name": "Poze",
+      "url": "/cloud.php",
+      "icons": [
+        {
+          "src": "/assets/icons/icon-192.png?v=23.1",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "id": "/"
+}

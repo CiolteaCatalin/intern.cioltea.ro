@@ -1,0 +1,215 @@
+CREATE TABLE IF NOT EXISTS transactions (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  type ENUM('expense','income') NOT NULL,
+  name VARCHAR(160) NOT NULL,
+  amount DECIMAL(12,2) NOT NULL,
+  category VARCHAR(80) NULL,
+  transaction_date DATETIME NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_transaction_date (transaction_date), INDEX idx_type (type)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS settings (`key` VARCHAR(100) PRIMARY KEY,`value` TEXT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+INSERT INTO settings (`key`,`value`) VALUES ('initial_balance','0'),('monthly_budget','5000'),('monthly_savings_target','0') ON DUPLICATE KEY UPDATE `value`=VALUES(`value`);
+CREATE TABLE IF NOT EXISTS recurring_items (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,type ENUM('expense','income') NOT NULL,name VARCHAR(160) NOT NULL,amount DECIMAL(12,2) NOT NULL,category VARCHAR(80) NULL,day_of_month TINYINT UNSIGNED NOT NULL DEFAULT 1,start_month CHAR(7) NOT NULL,end_month CHAR(7) NULL,active TINYINT(1) NOT NULL DEFAULT 1,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,INDEX idx_recurring_active (active),INDEX idx_recurring_start_month (start_month)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS recurring_runs (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,recurring_id BIGINT UNSIGNED NOT NULL,period CHAR(7) NOT NULL,transaction_id BIGINT UNSIGNED NULL,scheduled_date DATE NOT NULL,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE KEY uniq_recurring_period (recurring_id, period),INDEX idx_recurring_transaction (transaction_id),CONSTRAINT fk_recurring_runs_item FOREIGN KEY (recurring_id) REFERENCES recurring_items(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS transaction_meta (
+  transaction_id BIGINT UNSIGNED PRIMARY KEY,source VARCHAR(24) NOT NULL DEFAULT 'manual',bucket VARCHAR(24) NOT NULL DEFAULT 'variable',related_id BIGINT UNSIGNED NULL,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,INDEX idx_meta_source (source),INDEX idx_meta_bucket (bucket),CONSTRAINT fk_meta_tx FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS bills (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,name VARCHAR(160) NOT NULL,category VARCHAR(80) NULL,estimated_amount DECIMAL(12,2) NOT NULL DEFAULT 0,due_day TINYINT UNSIGNED NOT NULL DEFAULT 1,active TINYINT(1) NOT NULL DEFAULT 1,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,INDEX idx_bills_active (active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS bill_payments (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,bill_id BIGINT UNSIGNED NOT NULL,period CHAR(7) NOT NULL,amount DECIMAL(12,2) NOT NULL,paid_date DATE NOT NULL,transaction_id BIGINT UNSIGNED NULL,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,UNIQUE KEY uniq_bill_period (bill_id, period),INDEX idx_bill_tx (transaction_id),CONSTRAINT fk_bill_payment_bill FOREIGN KEY (bill_id) REFERENCES bills(id) ON DELETE CASCADE,CONSTRAINT fk_bill_payment_tx FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS savings_goals (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,name VARCHAR(160) NOT NULL,target_amount DECIMAL(12,2) NOT NULL,active TINYINT(1) NOT NULL DEFAULT 1,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,INDEX idx_goal_active (active)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS savings_contributions (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,goal_id BIGINT UNSIGNED NOT NULL,amount DECIMAL(12,2) NOT NULL,contribution_date DATE NOT NULL,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,INDEX idx_savings_date (contribution_date),CONSTRAINT fk_savings_goal FOREIGN KEY (goal_id) REFERENCES savings_goals(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS category_budgets (
+  category VARCHAR(80) PRIMARY KEY,monthly_limit DECIMAL(12,2) NOT NULL DEFAULT 0,active TINYINT(1) NOT NULL DEFAULT 1,updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Cioltea Hub v6
+CREATE TABLE IF NOT EXISTS family_members (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(80) NOT NULL,
+  initial VARCHAR(3) NOT NULL,
+  avatar_color VARCHAR(16) NOT NULL DEFAULT '#315CF5',
+  theme_key VARCHAR(32) NOT NULL DEFAULT 'blue',
+  active TINYINT(1) NOT NULL DEFAULT 1,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+INSERT INTO family_members(name,initial,avatar_color)
+SELECT 'Cătălin','C','#315CF5' WHERE NOT EXISTS (SELECT 1 FROM family_members LIMIT 1);
+INSERT INTO family_members(name,initial,avatar_color)
+SELECT 'Laura','L','#A855F7' WHERE (SELECT COUNT(*) FROM family_members)=1 AND NOT EXISTS (SELECT 1 FROM family_members WHERE name='Laura');
+
+CREATE TABLE IF NOT EXISTS activity_log (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  member_id BIGINT UNSIGNED NULL,
+  action VARCHAR(80) NOT NULL,
+  entity_type VARCHAR(50) NULL,
+  entity_id BIGINT UNSIGNED NULL,
+  label VARCHAR(190) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_activity_created (created_at), INDEX idx_activity_member (member_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS family_lists (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(120) NOT NULL, icon VARCHAR(32) NOT NULL DEFAULT 'cart', archived TINYINT(1) NOT NULL DEFAULT 0,
+  created_by_member_id BIGINT UNSIGNED NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS family_list_items (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, list_id BIGINT UNSIGNED NOT NULL, name VARCHAR(180) NOT NULL,
+  quantity VARCHAR(40) NULL, checked TINYINT(1) NOT NULL DEFAULT 0, created_by_member_id BIGINT UNSIGNED NULL,
+  checked_by_member_id BIGINT UNSIGNED NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, checked_at DATETIME NULL,
+  INDEX idx_list_items_list (list_id), INDEX idx_list_items_checked (checked),
+  CONSTRAINT fk_list_items_list FOREIGN KEY (list_id) REFERENCES family_lists(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS family_tasks (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, title VARCHAR(180) NOT NULL, notes TEXT NULL,
+  due_date DATE NULL, due_time TIME NULL, assigned_member_id BIGINT UNSIGNED NULL,
+  completed TINYINT(1) NOT NULL DEFAULT 0, completed_by_member_id BIGINT UNSIGNED NULL,
+  created_by_member_id BIGINT UNSIGNED NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, completed_at DATETIME NULL,
+  INDEX idx_tasks_due (due_date), INDEX idx_tasks_completed (completed)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS family_events (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, title VARCHAR(180) NOT NULL, category VARCHAR(60) NOT NULL DEFAULT 'Familie',
+  event_date DATE NOT NULL, event_time TIME NULL, member_scope ENUM('all','member') NOT NULL DEFAULT 'all', member_id BIGINT UNSIGNED NULL,
+  location VARCHAR(190) NULL, notes TEXT NULL, remind_days INT NOT NULL DEFAULT 1, created_by_member_id BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX idx_events_date (event_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS family_documents (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name VARCHAR(180) NOT NULL, document_type VARCHAR(80) NULL,
+  owner_member_id BIGINT UNSIGNED NULL, expiry_date DATE NULL, remind_days INT NOT NULL DEFAULT 30,
+  notes TEXT NULL, created_by_member_id BIGINT UNSIGNED NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_docs_expiry (expiry_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS vehicles (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name VARCHAR(140) NOT NULL, color VARCHAR(16) NOT NULL DEFAULT '#315CF5', plate VARCHAR(30) NULL, vin VARCHAR(40) NULL, current_km INT UNSIGNED NULL,
+  notes TEXT NULL, active TINYINT(1) NOT NULL DEFAULT 1, created_by_member_id BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS vehicle_reminders (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, vehicle_id BIGINT UNSIGNED NOT NULL, kind VARCHAR(60) NOT NULL DEFAULT 'Altele',
+  title VARCHAR(180) NOT NULL, due_date DATE NULL, due_km INT UNSIGNED NULL, remind_days INT NOT NULL DEFAULT 14,
+  last_cost DECIMAL(12,2) NULL, notes TEXT NULL, completed TINYINT(1) NOT NULL DEFAULT 0, completed_at DATETIME NULL,
+  created_by_member_id BIGINT UNSIGNED NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  INDEX idx_vehicle_reminder_date (due_date), INDEX idx_vehicle_reminder_vehicle (vehicle_id),
+  CONSTRAINT fk_vehicle_reminder_vehicle FOREIGN KEY (vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS home_reminders (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, title VARCHAR(180) NOT NULL, category VARCHAR(80) NOT NULL DEFAULT 'Casă',
+  due_date DATE NULL, remind_days INT NOT NULL DEFAULT 14, notes TEXT NULL, completed TINYINT(1) NOT NULL DEFAULT 0,
+  created_by_member_id BIGINT UNSIGNED NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, INDEX idx_home_due (due_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS subscriptions (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name VARCHAR(160) NOT NULL, amount DECIMAL(12,2) NOT NULL,
+  billing_cycle ENUM('monthly','yearly') NOT NULL DEFAULT 'monthly', renewal_day TINYINT UNSIGNED NULL, renewal_month TINYINT UNSIGNED NULL,
+  category VARCHAR(80) NULL, active TINYINT(1) NOT NULL DEFAULT 1, created_by_member_id BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS wishlist_items (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name VARCHAR(180) NOT NULL, estimated_cost DECIMAL(12,2) NULL,
+  target_date DATE NULL, savings_goal_id BIGINT UNSIGNED NULL,
+  priority ENUM('need','nice','want') NOT NULL DEFAULT 'want', url VARCHAR(500) NULL, notes TEXT NULL,
+  purchased TINYINT(1) NOT NULL DEFAULT 0, created_by_member_id BIGINT UNSIGNED NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS notification_log (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, dedupe_key VARCHAR(190) NOT NULL, member_id BIGINT UNSIGNED NULL,
+  sent_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uniq_notification_dedupe (dedupe_key,member_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Cioltea Hub v14
+CREATE TABLE IF NOT EXISTS scheduled_expenses (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(160) NOT NULL, amount DECIMAL(12,2) NOT NULL, category VARCHAR(80) NULL,
+  due_date DATE NOT NULL, bucket ENUM('fixed','variable') NOT NULL DEFAULT 'fixed', notes TEXT NULL,
+  status ENUM('pending','paid','cancelled') NOT NULL DEFAULT 'pending', paid_date DATE NULL,
+  transaction_id BIGINT UNSIGNED NULL, created_by_member_id BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_scheduled_due (due_date), INDEX idx_scheduled_status (status),
+  CONSTRAINT fk_scheduled_tx FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS bank_import_rows (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, bank VARCHAR(20) NOT NULL, fingerprint CHAR(64) NOT NULL,
+  transaction_id BIGINT UNSIGNED NULL, booking_date DATE NOT NULL, amount DECIMAL(12,2) NOT NULL,
+  description VARCHAR(500) NOT NULL, reference_value VARCHAR(190) NULL, imported_by_member_id BIGINT UNSIGNED NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY uniq_bank_fingerprint (bank,fingerprint), INDEX idx_bank_date (booking_date),
+  CONSTRAINT fk_bank_import_tx FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+
+CREATE TABLE IF NOT EXISTS family_recipes (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, title VARCHAR(180) NOT NULL, description TEXT NULL, preparation LONGTEXT NOT NULL, image_path VARCHAR(500) NULL, image_mime VARCHAR(120) NULL, image_name VARCHAR(255) NULL, created_by_member_id BIGINT UNSIGNED NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, INDEX idx_recipes_created (created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS family_recipe_ingredients (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, recipe_id BIGINT UNSIGNED NOT NULL, ingredient_text VARCHAR(255) NOT NULL, sort_order INT NOT NULL DEFAULT 0, INDEX idx_recipe_ingredients_recipe (recipe_id), CONSTRAINT fk_recipe_ingredient_recipe FOREIGN KEY (recipe_id) REFERENCES family_recipes(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS family_birthdays (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, name VARCHAR(140) NOT NULL, relation_label VARCHAR(100) NULL, birth_date DATE NOT NULL, birth_year SMALLINT UNSIGNED NULL, notes TEXT NULL, created_by_member_id BIGINT UNSIGNED NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, INDEX idx_birthdays_date (birth_date)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Cioltea Hub v19 - Chirii
+CREATE TABLE IF NOT EXISTS rental_properties (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(160) NOT NULL, address VARCHAR(255) NULL, tenant_name VARCHAR(160) NULL,
+  monthly_rent DECIMAL(12,2) NOT NULL DEFAULT 0, due_day TINYINT UNSIGNED NOT NULL DEFAULT 1,
+  savings_goal_id BIGINT UNSIGNED NULL, active TINYINT(1) NOT NULL DEFAULT 1, notes TEXT NULL,
+  created_by_member_id BIGINT UNSIGNED NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_rental_properties_active (active), INDEX idx_rental_properties_goal (savings_goal_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS rental_payments (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, property_id BIGINT UNSIGNED NOT NULL, period CHAR(7) NOT NULL,
+  due_date DATE NOT NULL, expected_amount DECIMAL(12,2) NOT NULL DEFAULT 0,
+  status ENUM('pending','paid','cancelled') NOT NULL DEFAULT 'pending', paid_amount DECIMAL(12,2) NULL,
+  paid_date DATE NULL, transaction_id BIGINT UNSIGNED NULL, savings_contribution_id BIGINT UNSIGNED NULL,
+  paid_by_member_id BIGINT UNSIGNED NULL, created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uniq_rental_property_period (property_id,period), INDEX idx_rental_due (due_date), INDEX idx_rental_status (status),
+  CONSTRAINT fk_rental_payment_property FOREIGN KEY (property_id) REFERENCES rental_properties(id) ON DELETE CASCADE,
+  CONSTRAINT fk_rental_payment_tx FOREIGN KEY (transaction_id) REFERENCES transactions(id) ON DELETE SET NULL,
+  CONSTRAINT fk_rental_payment_savings FOREIGN KEY (savings_contribution_id) REFERENCES savings_contributions(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS rental_improvements (
+  id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, property_id BIGINT UNSIGNED NOT NULL, title VARCHAR(180) NOT NULL,
+  estimated_cost DECIMAL(12,2) NOT NULL DEFAULT 0, target_date DATE NULL,
+  priority ENUM('high','medium','low') NOT NULL DEFAULT 'medium', status ENUM('planned','done','cancelled') NOT NULL DEFAULT 'planned',
+  notes TEXT NULL, created_by_member_id BIGINT UNSIGNED NULL, completed_at DATETIME NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_rental_improvement_property (property_id), INDEX idx_rental_improvement_status (status),
+  CONSTRAINT fk_rental_improvement_property FOREIGN KEY (property_id) REFERENCES rental_properties(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- Cioltea Hub v22
+CREATE TABLE IF NOT EXISTS house_purchases (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,name VARCHAR(180) NOT NULL,store VARCHAR(120) NULL,purchase_date DATE NULL,amount DECIMAL(12,2) NULL,warranty_until DATE NULL,serial_no VARCHAR(120) NULL,notes TEXT NULL,document_path VARCHAR(500) NULL,created_by_member_id BIGINT UNSIGNED NULL,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,INDEX idx_house_purchase_warranty(warranty_until)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS house_consumables (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,name VARCHAR(160) NOT NULL,quantity DECIMAL(10,2) NOT NULL DEFAULT 0,unit VARCHAR(30) NOT NULL DEFAULT 'buc',minimum_qty DECIMAL(10,2) NOT NULL DEFAULT 0,location VARCHAR(160) NULL,notes TEXT NULL,created_by_member_id BIGINT UNSIGNED NULL,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS house_plan_rooms (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,name VARCHAR(120) NOT NULL,width_m DECIMAL(6,2) NOT NULL DEFAULT 3,length_m DECIMAL(6,2) NOT NULL DEFAULT 3,x_pos INT NOT NULL DEFAULT 20,y_pos INT NOT NULL DEFAULT 20,color VARCHAR(16) NULL,created_by_member_id BIGINT UNSIGNED NULL,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS house_plan_openings (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,room_id BIGINT UNSIGNED NOT NULL,opening_type ENUM('door','window') NOT NULL,side ENUM('top','right','bottom','left') NOT NULL DEFAULT 'top',offset_pct TINYINT UNSIGNED NOT NULL DEFAULT 50,label VARCHAR(100) NULL,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,INDEX idx_open_room(room_id),CONSTRAINT fk_open_room FOREIGN KEY(room_id) REFERENCES house_plan_rooms(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS house_plan_settings (id TINYINT PRIMARY KEY DEFAULT 1,sketch_path VARCHAR(500) NULL,updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+INSERT IGNORE INTO house_plan_settings(id) VALUES(1);
+CREATE TABLE IF NOT EXISTS house_renovations (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,name VARCHAR(180) NOT NULL,budget DECIMAL(12,2) NOT NULL DEFAULT 0,status ENUM('planned','active','done') NOT NULL DEFAULT 'planned',notes TEXT NULL,created_by_member_id BIGINT UNSIGNED NULL,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS house_renovation_costs (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,renovation_id BIGINT UNSIGNED NOT NULL,name VARCHAR(180) NOT NULL,amount DECIMAL(12,2) NOT NULL,cost_date DATE NOT NULL,notes TEXT NULL,created_by_member_id BIGINT UNSIGNED NULL,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,INDEX idx_ren_cost_project(renovation_id),CONSTRAINT fk_ren_cost_project FOREIGN KEY(renovation_id) REFERENCES house_renovations(id) ON DELETE CASCADE) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+CREATE TABLE IF NOT EXISTS vehicle_costs (id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,vehicle_id BIGINT UNSIGNED NOT NULL,category VARCHAR(80) NOT NULL,name VARCHAR(180) NOT NULL,amount DECIMAL(12,2) NOT NULL,cost_date DATE NOT NULL,odometer INT UNSIGNED NULL,notes TEXT NULL,transaction_id BIGINT UNSIGNED NULL,created_by_member_id BIGINT UNSIGNED NULL,created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,INDEX idx_vehicle_cost_vehicle(vehicle_id),INDEX idx_vehicle_cost_date(cost_date),CONSTRAINT fk_vehicle_cost_vehicle FOREIGN KEY(vehicle_id) REFERENCES vehicles(id) ON DELETE CASCADE,CONSTRAINT fk_vehicle_cost_tx FOREIGN KEY(transaction_id) REFERENCES transactions(id) ON DELETE SET NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

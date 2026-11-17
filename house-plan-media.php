@@ -1,0 +1,2 @@
+<?php
+require __DIR__.'/includes/bootstrap.php';require_login();$p=(string)$pdo->query('SELECT sketch_path FROM house_plan_settings WHERE id=1')->fetchColumn();if(!$p||!str_starts_with($p,'storage/house-plan/')||!is_file(__DIR__.'/'.$p)){http_response_code(404);exit;}$mime=(new finfo(FILEINFO_MIME_TYPE))->file(__DIR__.'/'.$p)?:'image/jpeg';header('Content-Type: '.$mime);header('Cache-Control: private,max-age=86400');readfile(__DIR__.'/'.$p);

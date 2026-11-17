@@ -1,0 +1,40 @@
+<?php
+require __DIR__.'/includes/bootstrap.php';require_login();
+$members=family_members($pdo);$memberId=current_member_id();
+if($_SERVER['REQUEST_METHOD']==='POST'){
+    verify_csrf();$action=$_POST['action']??'';
+    try{
+        if($action==='add_task'){
+            $title=trim($_POST['title']??'');$date=parse_ro_date($_POST['due_date']??'');$time=trim($_POST['due_time']??'')?:null;$assigned=(int)($_POST['assigned_member_id']??0)?:null;
+            if($title==='')throw new RuntimeException('Completează titlul.');
+            $s=$pdo->prepare('INSERT INTO family_tasks(title,notes,due_date,due_time,assigned_member_id,created_by_member_id) VALUES(?,?,?,?,?,?)');$s->execute([$title,trim($_POST['notes']??'')?:null,$date,$time,$assigned,$memberId]);$id=(int)$pdo->lastInsertId();log_activity($pdo,'task_added','task',$id,$title); if($assigned && $assigned!==$memberId && notifications_configured($config))push_send($config,$pdo,[$assigned],member_name($pdo,$memberId).' ți-a atribuit un task',$title,'/family.php'); $msg='Task adăugat.';
+        }elseif($action==='toggle_task'){
+            $id=(int)($_POST['id']??0);$s=$pdo->prepare('SELECT title,completed FROM family_tasks WHERE id=?');$s->execute([$id]);$r=$s->fetch();if($r){$done=!$r['completed'];$u=$pdo->prepare('UPDATE family_tasks SET completed=?,completed_by_member_id=?,completed_at=? WHERE id=?');$u->execute([$done?1:0,$done?$memberId:null,$done?date('Y-m-d H:i:s'):null,$id]);log_activity($pdo,$done?'task_done':'task_reopened','task',$id,$r['title']);}
+        }elseif($action==='add_document'){
+            $name=trim($_POST['name']??'');$expiry=parse_ro_date($_POST['expiry_date']??'');if($name==='')throw new RuntimeException('Completează denumirea documentului.');$owner=(int)($_POST['owner_member_id']??0)?:null;
+            $s=$pdo->prepare('INSERT INTO family_documents(name,document_type,owner_member_id,expiry_date,remind_days,notes,created_by_member_id) VALUES(?,?,?,?,?,?,?)');$s->execute([$name,trim($_POST['document_type']??'')?:null,$owner,$expiry,max(0,(int)($_POST['remind_days']??30)),trim($_POST['notes']??'')?:null,$memberId]);$id=(int)$pdo->lastInsertId();log_activity($pdo,'document_added','document',$id,$name);$msg='Document adăugat.';
+        }elseif($action==='delete'){
+            $entity=$_POST['entity']??'';$id=(int)($_POST['id']??0);$map=['task'=>'family_tasks','document'=>'family_documents'];if(isset($map[$entity])){$pdo->prepare('DELETE FROM '.$map[$entity].' WHERE id=?')->execute([$id]);}
+        }
+    }catch(Throwable $e){$error=$e->getMessage();}
+    if(empty($error)){header('Location:/family.php'.(!empty($msg)?'?ok=1':''));exit;}
+}
+$tasks=$pdo->query("SELECT t.*,m.name assigned_name FROM family_tasks t LEFT JOIN family_members m ON m.id=t.assigned_member_id ORDER BY t.completed,t.due_date IS NULL,t.due_date,t.id DESC LIMIT 30")->fetchAll();
+
+$docs=$pdo->query("SELECT d.*,m.name owner_name FROM family_documents d LEFT JOIN family_members m ON m.id=d.owner_member_id ORDER BY d.expiry_date IS NULL,d.expiry_date,d.id DESC LIMIT 25")->fetchAll();
+$pageTitle='Familie';$active='family';require __DIR__.'/includes/layout_top.php';
+?>
+<?php if(!empty($error)):?><div class="alert error"><?=e($error)?></div><?php endif;?>
+<div class="segmented" data-segments><button class="active" data-segment="tasks">Task-uri</button><button data-segment="docs">Documente</button></div>
+<section data-panel="tasks">
+<div class="section-head"><div><span class="eyebrow">Împreună</span><h2>De făcut</h2></div><button class="btn small primary" data-open-sheet="taskSheet"><?=icon('plus')?> Adaugă</button></div>
+<div class="task-list"><?php if(!$tasks):?><div class="empty">Nu aveți task-uri. 🎉</div><?php endif;?><?php foreach($tasks as $t):?><article class="task-row <?=$t['completed']?'done':''?>"><form method="post"><input type="hidden" name="csrf" value="<?=e(csrf_token())?>"><input type="hidden" name="action" value="toggle_task"><input type="hidden" name="id" value="<?=$t['id']?>"><button class="check-btn" aria-label="Marchează"><?= $t['completed']?icon('check'):'' ?></button></form><div><strong><?=e($t['title'])?></strong><span><?php if($t['assigned_name']):?><?=e($t['assigned_name'])?> · <?php endif;?><?=$t['due_date']?e(short_due_label($t['due_date'])):'fără termen'?><?php if($t['due_time']):?> · <?=e(substr($t['due_time'],0,5))?><?php endif;?></span></div><form method="post" class="row-action"><input type="hidden" name="csrf" value="<?=e(csrf_token())?>"><input type="hidden" name="action" value="delete"><input type="hidden" name="entity" value="task"><input type="hidden" name="id" value="<?=$t['id']?>"><button class="icon-btn tiny"><?=icon('trash')?></button></form></article><?php endforeach;?></div>
+</section>
+<section data-panel="docs" hidden>
+<div class="section-head"><div><span class="eyebrow">Expirări</span><h2>Documente importante</h2></div><button class="btn small primary" data-open-sheet="docSheet"><?=icon('plus')?> Adaugă</button></div>
+<div class="card-list"><?php if(!$docs):?><div class="empty">Adaugă CI, permis, pașaport sau alte documente.</div><?php endif;?><?php foreach($docs as $d):$days=days_until($d['expiry_date']);?><article class="info-card"><span class="mini-icon"><?=icon('document')?></span><div><strong><?=e($d['name'])?></strong><span><?=e($d['owner_name']?:'Familie')?><?=$d['document_type']?' · '.e($d['document_type']):''?></span></div><div class="right"><b><?=$d['expiry_date']?e(date_ro($d['expiry_date'])):'—'?></b><?php if($days!==null):?><small class="<?=$days<30?'warn':''?>"><?=e(short_due_label($d['expiry_date']))?></small><?php endif;?></div></article><?php endforeach;?></div>
+</section>
+
+<div class="modal" id="taskSheet" aria-hidden="true"><div class="modal-backdrop" data-close-sheet></div><section class="sheet"><div class="sheet-handle"></div><div class="sheet-head"><div><span class="eyebrow">Familie</span><h2>Task nou</h2></div><button class="icon-btn" data-close-sheet><?=icon('close')?></button></div><form method="post" class="form-stack"><input type="hidden" name="csrf" value="<?=e(csrf_token())?>"><input type="hidden" name="action" value="add_task"><label>Titlu<input name="title" required placeholder="Ex: Programare ITP"></label><div class="form-grid"><label>Termen<input class="ro-date" name="due_date" inputmode="numeric" maxlength="10" placeholder="ZZ.LL.AAAA"></label><label>Ora<input type="time" name="due_time"></label></div><label>Pentru<select name="assigned_member_id"><option value="">Oricare</option><?php foreach($members as $m):?><option value="<?=$m['id']?>"><?=e($m['name'])?></option><?php endforeach;?></select></label><label>Notițe<textarea name="notes" rows="3"></textarea></label><button class="btn primary wide">Adaugă task</button></form></section></div>
+<div class="modal" id="docSheet" aria-hidden="true"><div class="modal-backdrop" data-close-sheet></div><section class="sheet"><div class="sheet-handle"></div><div class="sheet-head"><div><span class="eyebrow">Documente</span><h2>Document nou</h2></div><button class="icon-btn" data-close-sheet><?=icon('close')?></button></div><form method="post" class="form-stack"><input type="hidden" name="csrf" value="<?=e(csrf_token())?>"><input type="hidden" name="action" value="add_document"><label>Denumire<input name="name" required placeholder="Ex: Permis conducere"></label><label>Tip<input name="document_type" placeholder="CI, permis, pașaport..."></label><label>Proprietar<select name="owner_member_id"><option value="">Familie</option><?php foreach($members as $m):?><option value="<?=$m['id']?>"><?=e($m['name'])?></option><?php endforeach;?></select></label><label>Expiră la<input class="ro-date" name="expiry_date" inputmode="numeric" maxlength="10" placeholder="ZZ.LL.AAAA"></label><label>Notifică înainte<select name="remind_days"><option value="7">7 zile</option><option value="14">14 zile</option><option value="30" selected>30 zile</option><option value="60">60 zile</option></select></label><button class="btn primary wide">Salvează</button></form></section></div>
+<?php require __DIR__.'/includes/layout_bottom.php';?>
